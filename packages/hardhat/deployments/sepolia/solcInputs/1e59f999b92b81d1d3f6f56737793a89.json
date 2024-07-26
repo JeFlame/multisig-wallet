@@ -1,0 +1,35 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "contracts/MultisigWallet.sol": {
+      "content": "//SPDX-License-Identifier: MIT\npragma solidity >=0.8.0 <0.9.0;\n\ncontract MultisigWallet {\n\tevent ExecutionSuccess(bytes32 txHash);\n\tevent ExecutionFailure(bytes32 txHash);\n\taddress[] public owners;\n\tmapping(address => bool) public isOwner;\n\tuint256 public ownerCount;\n\tuint256 public threshold;\n\tuint256 public nonce;\n\n\treceive() external payable {}\n\n\tconstructor(address[] memory _owners, uint256 _threshold) {\n\t\t_setupOwners(_owners, _threshold);\n\t}\n\n\tfunction _setupOwners(\n\t\taddress[] memory _owners,\n\t\tuint256 _threshold\n\t) internal {\n\t\trequire(threshold == 0, \"MWEC:5000\");\n\t\trequire(_threshold <= _owners.length, \"MWEC:5001\");\n\t\trequire(_threshold >= 1, \"MWEC:5002\");\n\n\t\tfor (uint256 i = 0; i < _owners.length; i++) {\n\t\t\taddress owner = _owners[i];\n\t\t\trequire(\n\t\t\t\towner != address(0) &&\n\t\t\t\t\towner != address(this) &&\n\t\t\t\t\t!isOwner[owner],\n\t\t\t\t\"MWEC:5003\"\n\t\t\t);\n\t\t\towners.push(owner);\n\t\t\tisOwner[owner] = true;\n\t\t}\n\t\townerCount = _owners.length;\n\t\tthreshold = _threshold;\n\t}\n\n\tfunction execTransaction(\n\t\taddress to,\n\t\tuint256 value,\n\t\tbytes memory data,\n\t\tbytes memory signatures\n\t) public payable virtual returns (bool success) {\n\t\tbytes32 txHash = encodeTransactionData(\n\t\t\tto,\n\t\t\tvalue,\n\t\t\tdata,\n\t\t\tnonce,\n\t\t\tblock.chainid\n\t\t);\n\t\tnonce++;\n\t\tcheckSignatures(txHash, signatures);\n\t\t(success, ) = to.call{ value: value }(data);\n\t\trequire(success, \"MWEC:5004\");\n\t\tif (success) emit ExecutionSuccess(txHash);\n\t\telse emit ExecutionFailure(txHash);\n\t}\n\n\tfunction checkSignatures(\n\t\tbytes32 dataHash,\n\t\tbytes memory signatures\n\t) public view {\n\t\tuint256 _threshold = threshold;\n\t\trequire(_threshold > 0, \"MWEC:5005\");\n\n\t\trequire(signatures.length >= _threshold * 65, \"MWEC:5006\");\n\n\t\taddress lastOwner = address(0);\n\t\taddress currentOwner;\n\t\tuint8 v;\n\t\tbytes32 r;\n\t\tbytes32 s;\n\t\tuint256 i;\n\t\tfor (i = 0; i < _threshold; i++) {\n\t\t\t(v, r, s) = signatureSplit(signatures, i);\n\t\t\tcurrentOwner = ecrecover(\n\t\t\t\tkeccak256(\n\t\t\t\t\tabi.encodePacked(\n\t\t\t\t\t\t\"\\x19Ethereum Signed Message:\\n32\",\n\t\t\t\t\t\tdataHash\n\t\t\t\t\t)\n\t\t\t\t),\n\t\t\t\tv,\n\t\t\t\tr,\n\t\t\t\ts\n\t\t\t);\n\t\t\trequire(\n\t\t\t\tcurrentOwner > lastOwner && isOwner[currentOwner],\n\t\t\t\t\"MWEC:5007\"\n\t\t\t);\n\t\t\tlastOwner = currentOwner;\n\t\t}\n\t}\n\n\tfunction signatureSplit(\n\t\tbytes memory signatures,\n\t\tuint256 pos\n\t) internal pure returns (uint8 v, bytes32 r, bytes32 s) {\n\t\tassembly {\n\t\t\tlet signaturePos := mul(0x41, pos)\n\t\t\tr := mload(add(signatures, add(signaturePos, 0x20)))\n\t\t\ts := mload(add(signatures, add(signaturePos, 0x40)))\n\t\t\tv := and(mload(add(signatures, add(signaturePos, 0x41))), 0xff)\n\t\t}\n\t}\n\n\tfunction encodeTransactionData(\n\t\taddress to,\n\t\tuint256 value,\n\t\tbytes memory data,\n\t\tuint256 _nonce,\n\t\tuint256 chainid\n\t) public pure returns (bytes32) {\n\t\tbytes32 safeTxHash = keccak256(\n\t\t\tabi.encode(to, value, keccak256(data), _nonce, chainid)\n\t\t);\n\t\treturn safeTxHash;\n\t}\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}
